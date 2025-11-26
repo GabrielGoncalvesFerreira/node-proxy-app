@@ -26,7 +26,7 @@ export const config = {
       erpToken: `${API_BASE}/api/v1/auth/token/erp`, 
       clientToken: `${API_BASE}/api/v1/auth/token`, 
     },
-    timeout: 8000,
+    timeout: 15000,
   },
   security: {
     clientId: process.env.OAUTH_CLIENT_ID,

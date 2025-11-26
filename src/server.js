@@ -37,11 +37,35 @@ app.addHook('onRequest', async (req, reply) => {
     req.raw.url = finalUrl; 
   }
 
-  // Auditoria Básica (IP Real)
+  // Auditoria Básica (IP Real) + normalização de headers para o backend
   req.headers['x-request-id'] ||= crypto.randomUUID();
   req.headers['x-bff'] = 'true';
-  req.headers['x-forwarded-for'] = req.ip;
-  req.headers['x-real-ip'] = req.ip;
+
+  // Helper simples para acessar/definir headers (Node lower-cases header names)
+  const getHeaderValue = (headers, name) => headers[name.toLowerCase()];
+  const setHeaderValue = (headers, name, value) => { headers[name.toLowerCase()] = value; };
+
+  const incomingXff = getHeaderValue(req.headers, 'x-forwarded-for');
+  const incomingRealIp = getHeaderValue(req.headers, 'x-real-ip');
+  const clientIp = incomingXff?.split(',').map(p => p.trim()).find(Boolean) || incomingRealIp || req.ip || req.socket?.remoteAddress;
+  const updatedChain = incomingXff ? `${incomingXff}, ${req.ip}` : req.ip;
+  const bffIp = req.socket?.localAddress || req.ip;
+
+  setHeaderValue(req.headers, 'x-forwarded-for', updatedChain);
+  setHeaderValue(req.headers, 'x-real-ip', clientIp);
+  setHeaderValue(req.headers, 'x-client-ip', clientIp);
+  setHeaderValue(req.headers, 'x-bff-ip', bffIp);
+
+  // Garante User-Agent mínimo
+  if (!getHeaderValue(req.headers, 'user-agent')) {
+    setHeaderValue(req.headers, 'user-agent', 'Unknown-Client/1.0');
+  }
+
+  // Preenche X-Client-Version com User-Agent apenas se estiver ausente
+  if (!getHeaderValue(req.headers, 'x-client-version')) {
+    const ua = getHeaderValue(req.headers, 'user-agent');
+    if (ua) setHeaderValue(req.headers, 'x-client-version', ua);
+  }
 });
 
 await app.register(formbody);
@@ -66,7 +90,48 @@ await app.register(proxy, {
       if (reply.statusCode >= 400) {
         req.log.warn(`[Proxy Status] ${reply.statusCode} para ${req.url}`);
       }
-      reply.send(res);
+
+      // Após validação bem-sucedida do endpoint de token do cliente,
+      // disparamos uma chamada ao endpoint ERP que exige Basic auth
+      try {
+        const path = req.raw.url.split('?')[0];
+        if (req.method === 'POST' && path === '/api/v1/auth/token' && reply.statusCode < 400) {
+          const contentType = req.headers['content-type'] || 'application/json';
+          let bodyToSend;
+          if (contentType.includes('application/x-www-form-urlencoded')) {
+            bodyToSend = new URLSearchParams(req.body).toString();
+          } else {
+            bodyToSend = JSON.stringify(req.body || {});
+          }
+
+          (async () => {
+            try {
+              const fetchRes = await fetch(config.api.endpoints.erpToken, {
+                method: 'POST',
+                headers: {
+                  authorization: `Basic ${config.security.basicAuthHeader}`,
+                  'content-type': contentType
+                },
+                body: bodyToSend
+              });
+
+              if (!fetchRes.ok) {
+                req.log.warn(`[ERP Token] falha ${fetchRes.status} ao chamar ${config.api.endpoints.erpToken}`);
+              } else {
+                req.log.info(`[ERP Token] chamado com sucesso ${fetchRes.status}`);
+              }
+            } catch (err) {
+              req.log.error(`[ERP Token] erro ao chamar endpoint: ${err?.message || err}`);
+            }
+          })();
+        }
+      } catch (err) {
+        req.log.error(`[Proxy onResponse] erro: ${err?.message || err}`);
+      }
+
+      // Use the upstream response stream; the default behavior is disabled when
+      // onResponse is provided.
+      reply.send(res.stream);
     }
   }
 });

@@ -4,22 +4,33 @@ import { config } from '../config/env.js';
 class AuthController {
 
   async loginSsoCallback(req, reply) {
-    const { ticket } = req.body || {};
+    const { ticket, email } = req.body || {};
 
     if (!ticket) {
       return reply.code(400).send({ message: 'Ticket é obrigatório.' });
     }
 
-    const userIp = req.ip; 
+    const userIp = req.ip;
+    const forwardedHeaders = {};
+    ['x-forwarded-for', 'x-real-ip', 'x-client-ip', 'x-bff-ip', 'x-request-id', 'user-agent', 'x-client-version'].forEach((header) => {
+      const value = req.headers[header];
+      if (value) forwardedHeaders[header] = value;
+    });
 
     try {
-      const result = await authService.exchangeTicketWithSSO(ticket, userIp);
-      
+      // Passamos opcionalmente o email recebido para o service. Se for fornecido,
+      // será usado ao chamar o endpoint ERP; caso contrário, será usado o email
+      // retornado pela validação no SSO.
+      const result = await authService.exchangeTicketWithSSO(ticket, userIp, email, forwardedHeaders);
+
       this._setCookie(reply, result.sessionId, result.ttl);
-      
-      return reply.send({ 
-        message: 'Login realizado com sucesso', 
-        user: result.user 
+
+      // Retorna ticket e email (email preferencialmente o que foi usado)
+      return reply.send({
+        message: 'Login realizado com sucesso',
+        ticket,
+        email: email || result.user?.email,
+        user: result.user
       });
 
     } catch (error) {

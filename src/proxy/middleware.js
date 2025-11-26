@@ -10,7 +10,10 @@ function getPolicy(path, method) {
     return { type: 'passthrough' }; 
   }
 
-  if (method === 'POST' && path === '/api/v1/auth/token') {
+  // Inject Basic auth only for ERP token endpoint. Keep the regular
+  // client token flow (/api/v1/auth/token) untouched so SSO validation
+  // or other BFF-handled flows are not forced to use Basic auth.
+  if (method === 'POST' && path === '/api/v1/auth/token/erp') {
     return { type: 'inject_basic_auth' };
   }
 
@@ -20,6 +23,34 @@ function getPolicy(path, method) {
 export async function proxyPreHandler(req, reply) {
   // URL já normalizada no server.js
   const currentPath = req.raw.url.split('?')[0]; 
+
+  // Normalização de headers para garantir que o cliente HTTP que vai falar
+  // com o Laravel receba os headers esperados (IP, X-Client-Version, etc.)
+  const getHeaderValue = (headers, name) => headers[name.toLowerCase()];
+  const setHeaderValue = (headers, name, value) => { headers[name.toLowerCase()] = value; };
+
+  const incomingXff = getHeaderValue(req.headers, 'x-forwarded-for');
+  const incomingRealIp = getHeaderValue(req.headers, 'x-real-ip');
+  const clientIp = incomingXff?.split(',').map(p => p.trim()).find(Boolean) || incomingRealIp || req.ip || req.socket?.remoteAddress;
+  const updatedChain = incomingXff ? `${incomingXff}, ${req.ip}` : req.ip;
+  const bffIp = req.socket?.localAddress || req.ip;
+
+  setHeaderValue(req.headers, 'x-forwarded-for', updatedChain);
+  setHeaderValue(req.headers, 'x-real-ip', clientIp);
+  setHeaderValue(req.headers, 'x-client-ip', clientIp);
+  setHeaderValue(req.headers, 'x-bff-ip', bffIp);
+
+  // Garante User-Agent mínimo
+  if (!getHeaderValue(req.headers, 'user-agent')) {
+    setHeaderValue(req.headers, 'user-agent', 'Unknown-Client/1.0');
+  }
+
+  // Preenche X-Client-Version com User-Agent apenas se estiver ausente
+  if (!getHeaderValue(req.headers, 'x-client-version')) {
+    const ua = getHeaderValue(req.headers, 'user-agent');
+    if (ua) setHeaderValue(req.headers, 'x-client-version', ua);
+  }
+
   const policy = getPolicy(currentPath, req.method);
 
   if (policy.type === 'passthrough') return;
