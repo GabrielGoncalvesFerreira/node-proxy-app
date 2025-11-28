@@ -1,6 +1,22 @@
 import { sessionService } from '../services/session.service.js';
 import { config } from '../config/env.js';
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function getBearerToken(headers = {}) {
+  const raw = headers.authorization || headers.Authorization;
+  if (!raw || typeof raw !== 'string') return null;
+  const [scheme, value] = raw.split(' ');
+  if (!scheme || scheme.toLowerCase() !== 'bearer') return null;
+  return value ? value.trim() : null;
+}
+
+function extractSessionIdFromHeader(headers = {}) {
+  const bearer = getBearerToken(headers);
+  if (!bearer) return null;
+  return UUID_REGEX.test(bearer) ? bearer : null;
+}
+
 function getPolicy(path, method) {
   if (path === '/health' || path.startsWith('/api/v1/public/')) {
     return { type: 'passthrough' };
@@ -63,6 +79,16 @@ export async function proxyPreHandler(req, reply) {
   }
 
   if (policy.type === 'user_session') {
+    const bearerSessionId = extractSessionIdFromHeader(req.headers);
+    if (bearerSessionId) {
+      const session = await sessionService.getSession(bearerSessionId);
+      if (!session) {
+        return reply.code(401).send({ message: 'Sessão inválida ou expirada.' });
+      }
+      req.headers.authorization = `Bearer ${session.token}`;
+      return;
+    }
+
     const sessionId = req.cookies[config.session.cookieName];
     
     if (!sessionId) {

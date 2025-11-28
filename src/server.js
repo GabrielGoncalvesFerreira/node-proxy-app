@@ -129,8 +129,6 @@ await app.register(proxy, {
         req.log.error(`[Proxy onResponse] erro: ${err?.message || err}`);
       }
 
-      // Use the upstream response stream; the default behavior is disabled when
-      // onResponse is provided.
       reply.send(res.stream);
     }
   }

@@ -24,6 +24,7 @@ export const config = {
     
     endpoints: {
       erpToken: `${API_BASE}/api/v1/auth/token/erp`, 
+      erpTokenUser: `${API_BASE}/api/v1/auth/token/erp/user`, 
       clientToken: `${API_BASE}/api/v1/auth/token`, 
     },
     timeout: 15000,

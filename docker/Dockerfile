@@ -20,4 +20,4 @@ COPY . .
 # Boas práticas de segurança: rodar como usuário não-root
 USER node
 EXPOSE 5180
-CMD ["node", "src/server.js"]
+CMD ["/usr/local/bin/node", "src/server.js"]
