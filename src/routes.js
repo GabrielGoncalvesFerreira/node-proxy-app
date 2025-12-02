@@ -8,6 +8,6 @@ export async function registerRoutes(app) {
   app.post('/api/v1/auth/sso/callback', authController.loginSsoCallback.bind(authController));
   app.post('/api/v1/auth/token/erp/user', erpUserAuthController.login.bind(erpUserAuthController));
 
-  app.get('/bff/session', sessionController.getSessionStatus.bind(sessionController));
-  app.post('/bff/logout', sessionController.logout.bind(sessionController));
+  app.get('/api/bff/session', sessionController.getSessionStatus.bind(sessionController));
+  app.post('/api/bff/logout', sessionController.logout.bind(sessionController));
 }

@@ -10,51 +10,36 @@ import { config } from './config/env.js';
 import { registerRoutes } from './routes.js';
 import { proxyPreHandler } from './proxy/middleware.js';
 
+const CORS_ORIGINS = (process.env.CORS_ORIGINS || '')
+  .split(',')
+  .map(o => o.trim())
+  .filter(Boolean);
+
 setGlobalDispatcher(new Agent({
   keepAliveTimeout: 10_000,
   keepAliveMaxTimeout: 60_000
 }));
 
-const app = Fastify({ 
+const app = Fastify({
   logger: true,
-  trustProxy: true 
+  trustProxy: ['127.0.0.1', '::1', '172.27.0.0/24'],
+});
+
+// CORS configurável por env (registra uma vez para todas as rotas/proxy)
+await app.register(cors, {
+  origin: CORS_ORIGINS.length ? CORS_ORIGINS : false, // false bloqueia tudo
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 });
 
 app.addHook('onRequest', async (req, reply) => {
-  // Normalização de URL
-  let currentUrl = req.raw.url;
-  const [rawPath, query] = currentUrl.split('?');
-  
-  let newPath = rawPath;
-  if (!newPath.startsWith('/api')) {
-    newPath = newPath.startsWith('/') ? `/api${newPath}` : `/api/${newPath}`;
-  }
-  newPath = newPath.replace(/^\/api\/api/, '/api');
-
-  const finalUrl = query ? `${newPath}?${query}` : newPath;
-
-  if (currentUrl !== finalUrl) {
-    req.raw.url = finalUrl; 
-  }
-
-  // Auditoria Básica (IP Real) + normalização de headers para o backend
-  req.headers['x-request-id'] ||= crypto.randomUUID();
-  req.headers['x-bff'] = 'true';
-
   // Helper simples para acessar/definir headers (Node lower-cases header names)
   const getHeaderValue = (headers, name) => headers[name.toLowerCase()];
   const setHeaderValue = (headers, name, value) => { headers[name.toLowerCase()] = value; };
 
-  const incomingXff = getHeaderValue(req.headers, 'x-forwarded-for');
-  const incomingRealIp = getHeaderValue(req.headers, 'x-real-ip');
-  const clientIp = incomingXff?.split(',').map(p => p.trim()).find(Boolean) || incomingRealIp || req.ip || req.socket?.remoteAddress;
-  const updatedChain = incomingXff ? `${incomingXff}, ${req.ip}` : req.ip;
-  const bffIp = req.socket?.localAddress || req.ip;
-
-  setHeaderValue(req.headers, 'x-forwarded-for', updatedChain);
-  setHeaderValue(req.headers, 'x-real-ip', clientIp);
+  const clientIp = req.ip; // em vez de req.ips?.[0] || req.ip
   setHeaderValue(req.headers, 'x-client-ip', clientIp);
-  setHeaderValue(req.headers, 'x-bff-ip', bffIp);
+
 
   // Garante User-Agent mínimo
   if (!getHeaderValue(req.headers, 'user-agent')) {
@@ -71,20 +56,15 @@ app.addHook('onRequest', async (req, reply) => {
 await app.register(formbody);
 await app.register(cookie);
 
-await app.register(cors, {
-  origin: true, 
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
-});
-
-await registerRoutes(app);
+await app.register(registerRoutes, { prefix: '/auth' });
 
 await app.register(proxy, {
   upstream: config.api.baseUrl,
-  prefix: '/',
+  prefix: '/auth',            // só intercepta caminhos que começam com /auth
+  rewritePrefix: '/',
   httpMethods: ['DELETE', 'GET', 'HEAD', 'PATCH', 'POST', 'PUT'],
-  preHandler: proxyPreHandler, 
-  
+  preHandler: proxyPreHandler,
+
   replyOptions: {
     onResponse: (req, reply, res) => {
       if (reply.statusCode >= 400) {
@@ -136,9 +116,9 @@ await app.register(proxy, {
 
 const start = async () => {
   try {
-    await app.listen({ 
+    await app.listen({
       host: '0.0.0.0',
-      port: Number(config.app.port) 
+      port: Number(config.app.port)
     });
     console.log(`🚀 BFF Cotação rodando na porta ${config.app.port}`);
     console.log(`👉 Backend Alvo: ${config.api.baseUrl}`);

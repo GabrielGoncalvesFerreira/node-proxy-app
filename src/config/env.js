@@ -5,6 +5,10 @@ const sanitizeUrl = (url) => (url ? url.replace(/\/$/, '') : '');
 
 const API_BASE = sanitizeUrl(process.env.API_BASE);       // Backend Cotação
 const SSO_API_URL = sanitizeUrl(process.env.SSO_API_URL); // BFF SSO
+const CORS_ORIGINS = (process.env.CORS_ORIGINS || '')
+  .split(',')
+  .map(o => o.trim())
+  .filter(Boolean);
 
 if (!API_BASE) throw new Error('FATAL: API_BASE é obrigatória.');
 if (!SSO_API_URL) throw new Error('FATAL: SSO_API_URL é obrigatória.');

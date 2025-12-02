@@ -13,26 +13,38 @@ class SessionService {
     const sessionId = crypto.randomUUID();
     const key = this._getKey(sessionId);
     const ttl = ttlSeconds || config.session.ttlSeconds;
+    const now = Date.now();
+    const expiresAt = now + ttl * 1000;
 
-    // Serializa para string antes de salvar no Redis
-    await redisClient.set(key, JSON.stringify(payload), {
-      EX: ttl,
-    });
+    const toStore = {
+      ...payload,
+      meta: {
+        createdAt: now,
+        expiresAt,
+        ttlSeconds: ttl
+      }
+    };
 
-    return { sessionId, ttl };
+    await redisClient.set(key, JSON.stringify(toStore), { EX: ttl });
+    return { sessionId, ttl, expiresAt };
   }
+
 
   /**
    * Recupera os dados da sessão pelo ID.
    */
   async getSession(sessionId) {
     if (!sessionId) return null;
-    
-    const key = this._getKey(sessionId);
-    const data = await redisClient.get(key);
-    
-    return data ? JSON.parse(data) : null;
+    const data = await redisClient.get(this._getKey(sessionId));
+    if (!data) return null;
+    const parsed = JSON.parse(data);
+    if (parsed.meta?.expiresAt && Date.now() > parsed.meta.expiresAt) {
+      removeSession(sessionId)
+      return null; 
+    }
+    return parsed;
   }
+
 
   /**
    * Atualiza dados de uma sessão existente mantendo o ID (útil para MFA).
@@ -40,7 +52,7 @@ class SessionService {
   async updateSession(sessionId, newPayload, ttlSeconds) {
     const key = this._getKey(sessionId);
     const ttl = ttlSeconds || config.session.ttlSeconds;
-    
+
     await redisClient.set(key, JSON.stringify(newPayload), {
       EX: ttl // Reseta o TTL ou mantém o original se calcularmos a diferença (aqui reseta)
     });

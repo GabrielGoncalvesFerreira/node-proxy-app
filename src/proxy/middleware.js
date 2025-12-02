@@ -23,7 +23,7 @@ function getPolicy(path, method) {
   }
 
   if (path === '/api/v1/auth/sso/callback') {
-    return { type: 'passthrough' }; 
+    return { type: 'passthrough' };
   }
 
   // Inject Basic auth only for ERP token endpoint. Keep the regular
@@ -38,23 +38,21 @@ function getPolicy(path, method) {
 
 export async function proxyPreHandler(req, reply) {
   // URL já normalizada no server.js
-  const currentPath = req.raw.url.split('?')[0]; 
+  const currentPath = req.raw.url.split('?')[0];
 
-  // Normalização de headers para garantir que o cliente HTTP que vai falar
-  // com o Laravel receba os headers esperados (IP, X-Client-Version, etc.)
+
+
   const getHeaderValue = (headers, name) => headers[name.toLowerCase()];
   const setHeaderValue = (headers, name, value) => { headers[name.toLowerCase()] = value; };
 
-  const incomingXff = getHeaderValue(req.headers, 'x-forwarded-for');
-  const incomingRealIp = getHeaderValue(req.headers, 'x-real-ip');
-  const clientIp = incomingXff?.split(',').map(p => p.trim()).find(Boolean) || incomingRealIp || req.ip || req.socket?.remoteAddress;
-  const updatedChain = incomingXff ? `${incomingXff}, ${req.ip}` : req.ip;
+  const clientIp = req.ip;
   const bffIp = req.socket?.localAddress || req.ip;
 
-  setHeaderValue(req.headers, 'x-forwarded-for', updatedChain);
-  setHeaderValue(req.headers, 'x-real-ip', clientIp);
   setHeaderValue(req.headers, 'x-client-ip', clientIp);
   setHeaderValue(req.headers, 'x-bff-ip', bffIp);
+
+
+  req.log.debug({ path: currentPath, clientIp }, 'Proxy pre-handler IP normalization');
 
   // Garante User-Agent mínimo
   if (!getHeaderValue(req.headers, 'user-agent')) {
@@ -90,7 +88,7 @@ export async function proxyPreHandler(req, reply) {
     }
 
     const sessionId = req.cookies[config.session.cookieName];
-    
+
     if (!sessionId) {
       return reply.code(401).send({ message: 'Sessão expirada ou não encontrada.' });
     }

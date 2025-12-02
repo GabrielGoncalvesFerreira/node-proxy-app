@@ -54,11 +54,6 @@ class AuthService {
         if (value) ipHeaders[header] = value;
       });
 
-      // Fallback mínimo usando userIp caso algum header não tenha chegado
-      if (!ipHeaders['x-real-ip'] && userIp) ipHeaders['x-real-ip'] = userIp;
-      if (!ipHeaders['x-client-ip'] && userIp) ipHeaders['x-client-ip'] = userIp;
-      if (!ipHeaders['x-forwarded-for'] && userIp) ipHeaders['x-forwarded-for'] = userIp;
-      if (!ipHeaders['x-bff-ip'] && userIp) ipHeaders['x-bff-ip'] = userIp;
 
       const { data: localData } = await httpClient.post(config.api.endpoints.erpToken, params, {
         headers: {
@@ -76,7 +71,7 @@ class AuthService {
         isPendingMfa: false
       };
 
-      const ttl = localData.expires_in || 86400;
+      const ttl = localData.expires_in;
       const { sessionId } = await sessionService.createSession(sessionPayload, ttl);
 
       return { sessionId, ttl, user: sessionPayload.user };
