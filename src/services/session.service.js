@@ -17,17 +17,18 @@ class SessionService {
     const expiresAt = now + ttl * 1000;
 
     const toStore = {
-      ...payload,
+      ...payload,          // inclua aqui um campo ip vindo do caller
       meta: {
         createdAt: now,
         expiresAt,
-        ttlSeconds: ttl
+        ttlSeconds: ttl,
       }
     };
 
     await redisClient.set(key, JSON.stringify(toStore), { EX: ttl });
     return { sessionId, ttl, expiresAt };
   }
+
 
 
   /**
@@ -39,8 +40,8 @@ class SessionService {
     if (!data) return null;
     const parsed = JSON.parse(data);
     if (parsed.meta?.expiresAt && Date.now() > parsed.meta.expiresAt) {
-      removeSession(sessionId)
-      return null; 
+      await this.removeSession(sessionId);
+      return null;
     }
     return parsed;
   }

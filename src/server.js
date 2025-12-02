@@ -1,6 +1,5 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
-import cookie from '@fastify/cookie';
 import formbody from '@fastify/formbody';
 import proxy from '@fastify/http-proxy';
 import { setGlobalDispatcher, Agent } from 'undici';
@@ -54,7 +53,6 @@ app.addHook('onRequest', async (req, reply) => {
 });
 
 await app.register(formbody);
-await app.register(cookie);
 
 await app.register(registerRoutes, { prefix: '/auth' });
 

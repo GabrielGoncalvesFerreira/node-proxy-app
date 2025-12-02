@@ -68,7 +68,8 @@ class AuthService {
         token: localData.access_token,
         user: localData.user || ssoData.user,
         scope: localData.scope,
-        isPendingMfa: false
+        isPendingMfa: false, 
+        ip: userIp
       };
 
       const ttl = localData.expires_in;

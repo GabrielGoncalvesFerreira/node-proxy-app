@@ -37,6 +37,7 @@ class ErpUserAuthController {
     const scope = body.scope;
     const rawClientType = req.headers['x-client-type'] ?? req.headers['x-client-typ'];
     const clientType = getClientTypeFromHeaders(req.headers);
+    const clientIp = req.ip;
 
     if (!login || !password) {
       return reply.code(400).send({
@@ -65,6 +66,7 @@ class ErpUserAuthController {
         user: result.user,
         scope: result.scope,
         clientType,
+        ip: clientIp,
         login,
       };
 

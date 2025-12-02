@@ -78,25 +78,16 @@ export async function proxyPreHandler(req, reply) {
 
   if (policy.type === 'user_session') {
     const bearerSessionId = extractSessionIdFromHeader(req.headers);
-    if (bearerSessionId) {
-      const session = await sessionService.getSession(bearerSessionId);
-      if (!session) {
-        return reply.code(401).send({ message: 'Sessão inválida ou expirada.' });
-      }
-      req.headers.authorization = `Bearer ${session.token}`;
-      return;
+    if (!bearerSessionId) {
+      return reply.code(401).send({ message: 'Bearer obrigatório.' });
     }
 
-    const sessionId = req.cookies[config.session.cookieName];
-
-    if (!sessionId) {
-      return reply.code(401).send({ message: 'Sessão expirada ou não encontrada.' });
-    }
-
-    const session = await sessionService.getSession(sessionId);
+    const session = await sessionService.getSession(bearerSessionId);
     if (!session) {
-      reply.clearCookie(config.session.cookieName, { path: '/', domain: config.session.domain });
-      return reply.code(401).send({ message: 'Sessão inválida.' });
+      return reply.code(401).send({ message: 'Sessão inválida ou expirada.' });
+    }
+    if (session.ip && session.ip !== req.ip) {
+      return reply.code(401).send({ message: 'Sessão inválida para este IP.' });
     }
 
     req.headers.authorization = `Bearer ${session.token}`;

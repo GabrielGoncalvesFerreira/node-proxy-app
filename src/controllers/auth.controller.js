@@ -1,5 +1,4 @@
 import { authService } from '../services/auth.service.js';
-import { config } from '../config/env.js';
 
 class AuthController {
 
@@ -23,31 +22,21 @@ class AuthController {
       // retornado pela validação no SSO.
       const result = await authService.exchangeTicketWithSSO(ticket, userIp, email, forwardedHeaders);
 
-      this._setCookie(reply, result.sessionId, result.ttl);
-
-      // Retorna ticket e email (email preferencialmente o que foi usado)
+      // Retorna token de sessão (bearer) sem setar cookie
       return reply.send({
         message: 'Login realizado com sucesso',
-        ticket,
+        token: result.sessionId,
+        token_type: 'Bearer',
+        expires_in: result.ttl,
         email: email || result.user?.email,
         user: result.user
       });
+
 
     } catch (error) {
       req.log.warn(`[Login Falha] ${error.message}`);
       return reply.code(401).send({ message: error.message });
     }
-  }
-
-  _setCookie(reply, sessionId, ttl) {
-    reply.setCookie(config.session.cookieName, sessionId, {
-      path: '/',
-      httpOnly: true,
-      secure: config.session.secure,
-      sameSite: config.session.sameSite,
-      domain: config.session.domain,
-      maxAge: ttl
-    });
   }
 }
 
