@@ -9,5 +9,6 @@ export async function registerRoutes(app) {
   app.post('/api/v1/auth/token/erp/user', erpUserAuthController.login.bind(erpUserAuthController));
 
   app.get('/api/bff/session', sessionController.getSessionStatus.bind(sessionController));
+  app.post('/api/bff/refresh', sessionController.refresh.bind(sessionController));
   app.post('/api/bff/logout', sessionController.logout.bind(sessionController));
 }

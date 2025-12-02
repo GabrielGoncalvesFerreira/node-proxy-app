@@ -45,10 +45,11 @@ export const config = {
     url: process.env.REDIS_URL,
   },
   session: {
-    cookieName: process.env.SESSION_COOKIE_NAME || 'cotacao_session',
     domain: process.env.SESSION_COOKIE_DOMAIN,
     secure: process.env.SESSION_COOKIE_SECURE !== 'false',
     sameSite: 'lax',
     ttlSeconds: Number(process.env.SESSION_TTL_SECONDS) || 86400,
+    refreshCookieName: process.env.REFRESH_COOKIE_NAME || 'cotacao_refresh',
+    refreshTtlSeconds: Number(process.env.REFRESH_TTL_SECONDS) || 604800, // 7 dias padrão
   },
 };

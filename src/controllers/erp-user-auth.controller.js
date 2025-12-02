@@ -1,5 +1,6 @@
 import { erpUserAuthService } from '../services/erp-user-auth.service.js';
 import { sessionService } from '../services/session.service.js';
+import { config } from '../config/env.js';
 import { getClientTypeFromHeaders } from '../utils/client-type.js';
 
 const FORWARDED_HEADER_WHITELIST = [
@@ -72,6 +73,18 @@ class ErpUserAuthController {
 
       const ttl = result.expires_in || 86400;
       const { sessionId } = await sessionService.createSession(sessionPayload, ttl);
+
+      // Cria refresh token em cookie httpOnly
+      const refreshTtl = config.session.refreshTtlSeconds;
+      const { refreshId } = await sessionService.createRefreshToken(sessionId, refreshTtl, { ip: clientIp });
+      reply.setCookie(config.session.refreshCookieName, refreshId, {
+        httpOnly: true,
+        secure: config.session.secure,
+        sameSite: config.session.sameSite,
+        domain: config.session.domain,
+        path: '/',
+        maxAge: refreshTtl
+      });
 
       return reply.send({
         token: sessionId,

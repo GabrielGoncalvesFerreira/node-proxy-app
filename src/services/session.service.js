@@ -29,8 +29,6 @@ class SessionService {
     return { sessionId, ttl, expiresAt };
   }
 
-
-
   /**
    * Recupera os dados da sessão pelo ID.
    */
@@ -66,6 +64,29 @@ class SessionService {
     if (!sessionId) return;
     const key = this._getKey(sessionId);
     await redisClient.del(key);
+  }
+
+  /**
+   * Cria refresh token vinculado a uma sessão.
+   */
+  async createRefreshToken(sessionId, ttlSeconds, meta = {}) {
+    const refreshId = crypto.randomUUID();
+    const key = `refresh:${refreshId}`;
+    const ttl = ttlSeconds || config.session.refreshTtlSeconds;
+    const toStore = { sessionId, ...meta };
+    await redisClient.set(key, JSON.stringify(toStore), { EX: ttl });
+    return { refreshId, ttl };
+  }
+
+  async getSessionIdByRefresh(refreshId) {
+    if (!refreshId) return null;
+    const data = await redisClient.get(`refresh:${refreshId}`);
+    return data ? JSON.parse(data) : null;
+  }
+
+  async removeRefreshToken(refreshId) {
+    if (!refreshId) return;
+    await redisClient.del(`refresh:${refreshId}`);
   }
 
   // Helper privado para padronizar a chave no Redis

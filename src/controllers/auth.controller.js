@@ -1,4 +1,6 @@
 import { authService } from '../services/auth.service.js';
+import { sessionService } from '../services/session.service.js';
+import { config } from '../config/env.js';
 
 class AuthController {
 
@@ -22,7 +24,19 @@ class AuthController {
       // retornado pela validação no SSO.
       const result = await authService.exchangeTicketWithSSO(ticket, userIp, email, forwardedHeaders);
 
-      // Retorna token de sessão (bearer) sem setar cookie
+      // Cria refresh token e seta em cookie httpOnly
+      const refreshTtl = config.session.refreshTtlSeconds;
+      const { refreshId } = await sessionService.createRefreshToken(result.sessionId, refreshTtl, { ip: userIp });
+      reply.setCookie(config.session.refreshCookieName, refreshId, {
+        httpOnly: true,
+        secure: config.session.secure,
+        sameSite: config.session.sameSite,
+        domain: config.session.domain,
+        path: '/',
+        maxAge: refreshTtl
+      });
+
+      // Retorna token de sessão (bearer)
       return reply.send({
         message: 'Login realizado com sucesso',
         token: result.sessionId,
