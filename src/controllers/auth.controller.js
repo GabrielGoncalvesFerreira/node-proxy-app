@@ -40,6 +40,7 @@ class AuthController {
       return reply.send({
         message: 'Login realizado com sucesso',
         token: result.sessionId,
+        refresh_token: refreshId, 
         token_type: 'Bearer',
         expires_in: result.ttl,
         email: email || result.user?.email,

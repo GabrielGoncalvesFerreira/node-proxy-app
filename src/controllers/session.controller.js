@@ -52,7 +52,10 @@ class SessionController {
    * Usa refresh token em cookie httpOnly para emitir novo bearer.
    */
   async refresh(req, reply) {
-    const refreshToken = req.cookies?.[config.session.refreshCookieName];
+    const refreshToken =
+      req.cookies?.[config.session.refreshCookieName] ||
+      req.body?.refresh_token;
+
     if (!refreshToken) {
       return reply.code(401).send({ message: 'Refresh token ausente.' });
     }
@@ -72,14 +75,18 @@ class SessionController {
     // Validação opcional de IP atrelado ao refresh
     if (session.ip && session.ip !== req.ip) {
       await sessionService.removeRefreshToken(refreshToken);
+      await sessionService.removeSession(refreshData.sessionId, session.login);
       return reply.code(401).send({ message: 'Sessão inválida para este IP.' });
     }
 
     // Invalida sessão anterior e cria nova
-    await sessionService.removeSession(refreshData.sessionId);
     const { meta, ...payload } = session;
+    await sessionService.removeSession(refreshData.sessionId, payload.login);
     const accessTtl = meta?.ttlSeconds || config.session.ttlSeconds;
     const { sessionId, ttl } = await sessionService.createSession(payload, accessTtl);
+    if (payload.login) {
+      await sessionService.setSessionIdForLogin(payload.login, sessionId, accessTtl);
+    }
 
     // Rotaciona refresh token
     const refreshTtl = config.session.refreshTtlSeconds;
@@ -96,6 +103,7 @@ class SessionController {
 
     return reply.send({
       token: sessionId,
+      refresh_token: refreshId,
       token_type: 'Bearer',
       expires_in: ttl,
       user: payload.user,
@@ -110,7 +118,8 @@ class SessionController {
   async logout(req, reply) {
     const bearerSessionId = extractBearerSessionId(req);
     if (bearerSessionId) {
-      await sessionService.removeSession(bearerSessionId);
+      const session = await sessionService.getSession(bearerSessionId);
+      await sessionService.removeSession(bearerSessionId, session?.login);
     }
 
     const refreshToken = req.cookies?.[config.session.refreshCookieName];

@@ -21,7 +21,7 @@ setGlobalDispatcher(new Agent({
 
 const app = Fastify({
   logger: true,
-  trustProxy: ['127.0.0.1', '::1', '172.27.0.0/24'],
+  trustProxy: ['127.0.0.1', '::1', '172.40.0.0/24'],
 });
 
 // CORS configurável por env (registra uma vez para todas as rotas/proxy)
@@ -38,6 +38,9 @@ app.addHook('onRequest', async (req, reply) => {
 
   const clientIp = req.ip; // em vez de req.ips?.[0] || req.ip
   setHeaderValue(req.headers, 'x-client-ip', clientIp);
+
+  console.log(`👉 IP Cliente: ${clientIp}`);
+  console.log(`👉 URL: ${req.url}`);
 
 
   // Garante User-Agent mínimo

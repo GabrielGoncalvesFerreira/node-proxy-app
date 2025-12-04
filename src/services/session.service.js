@@ -2,7 +2,13 @@ import crypto from 'node:crypto';
 import redisClient from '../infra/redis-client.js';
 import { config } from '../config/env.js';
 
+const LOGIN_INDEX_PREFIX = 'sessao_login:';
+const loginKey = login => `${LOGIN_INDEX_PREFIX}${login}`;
+const refreshSessionKey = sessionId => `refresh_by_session:${sessionId}`;
+
+
 class SessionService {
+
   /**
    * Gera um ID de sessão e salva os dados no Redis.
    * @param {Object} payload - Dados do usuário/token para salvar.
@@ -38,7 +44,7 @@ class SessionService {
     if (!data) return null;
     const parsed = JSON.parse(data);
     if (parsed.meta?.expiresAt && Date.now() > parsed.meta.expiresAt) {
-      await this.removeSession(sessionId);
+      await this.removeSession(sessionId, parsed.login);
       return null;
     }
     return parsed;
@@ -60,10 +66,23 @@ class SessionService {
   /**
    * Remove a sessão (Logout).
    */
-  async removeSession(sessionId) {
+  async removeSession(sessionId, login) {
     if (!sessionId) return;
+    if (!login) {
+      const snapshot = await redisClient.get(this._getKey(sessionId));
+      if (snapshot) {
+        try {
+          const parsed = JSON.parse(snapshot);
+          login = parsed?.login;
+        } catch {
+          login = undefined;
+        }
+      }
+    }
     const key = this._getKey(sessionId);
     await redisClient.del(key);
+    await this.removeRefreshBySession(sessionId);
+    if (login) await this.removeSessionIndex(login);
   }
 
   /**
@@ -75,6 +94,7 @@ class SessionService {
     const ttl = ttlSeconds || config.session.refreshTtlSeconds;
     const toStore = { sessionId, ...meta };
     await redisClient.set(key, JSON.stringify(toStore), { EX: ttl });
+    await this.setRefreshForSession(sessionId, refreshId, ttl);
     return { refreshId, ttl };
   }
 
@@ -93,6 +113,39 @@ class SessionService {
   _getKey(id) {
     return `sessao:${id}`; // Mantive o prefixo 'sessao:' do seu código original
   }
+
+  async getSessionIdByLogin(login) {
+    if (!login) return null;
+    return redisClient.get(loginKey(login));
+  }
+
+  async setSessionIdForLogin(login, sessionId, ttlSeconds) {
+    if (!login || !sessionId) return;
+    const ttl = ttlSeconds || config.session.ttlSeconds;
+    await redisClient.set(loginKey(login), sessionId, { EX: ttl });
+  }
+
+  async removeSessionIndex(login) {
+    if (!login) return;
+    await redisClient.del(loginKey(login));
+  }
+
+  async setRefreshForSession(sessionId, refreshId, ttlSeconds) {
+    if (!sessionId || !refreshId) return;
+    const ttl = ttlSeconds || config.session.refreshTtlSeconds;
+    await redisClient.set(refreshSessionKey(sessionId), refreshId, { EX: ttl });
+  }
+
+  async getRefreshBySession(sessionId) {
+    if (!sessionId) return null;
+    return redisClient.get(refreshSessionKey(sessionId));
+  }
+
+  async removeRefreshBySession(sessionId) {
+    if (!sessionId) return;
+    await redisClient.del(refreshSessionKey(sessionId));
+  }
+
 }
 
 export const sessionService = new SessionService();

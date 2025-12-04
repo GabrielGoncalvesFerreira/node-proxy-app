@@ -41,6 +41,7 @@ class AuthService {
       // Se o caller forneceu um email (overrideEmail), use-o. Caso contrário,
       // use o email retornado pela validação SSO.
       const emailToUse = overrideEmail || ssoData.user?.email;
+      const normalizedEmail = emailToUse?.trim().toLowerCase();
 
       const params = new URLSearchParams({
         grant_type: 'sso_exchange',
@@ -64,18 +65,29 @@ class AuthService {
       });
 
       // 3. Cria Sessão Local
+      if (normalizedEmail) {
+        const previousSessionId = await sessionService.getSessionIdByLogin(normalizedEmail);
+        if (previousSessionId) {
+          await sessionService.removeSession(previousSessionId, normalizedEmail);
+        }
+      }
+
       const sessionPayload = {
         token: localData.access_token,
         user: localData.user || ssoData.user,
         scope: localData.scope,
         isPendingMfa: false, 
-        ip: userIp
+        ip: userIp,
+        login: normalizedEmail || emailToUse,
       };
 
       const ttl = localData.expires_in;
       const { sessionId } = await sessionService.createSession(sessionPayload, ttl);
+      if (normalizedEmail) {
+        await sessionService.setSessionIdForLogin(normalizedEmail, sessionId, ttl);
+      }
 
-      return { sessionId, ttl, user: sessionPayload.user };
+      return { sessionId, ttl, user: sessionPayload.user, login: normalizedEmail || emailToUse };
 
     } catch (error) {
       console.error('[AuthService] Recusa do Laravel:', error.response?.data || error.message);
