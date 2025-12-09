@@ -74,9 +74,25 @@ class SessionController {
 
     // Validação opcional de IP atrelado ao refresh
     if (session.ip && session.ip !== req.ip) {
+      req.log.warn({
+        sessionId: refreshData.sessionId,
+        sessionIp: session.ip,
+        requestIp: req.ip
+      }, 'Refresh bloqueado por IP divergente');
       await sessionService.removeRefreshToken(refreshToken);
       await sessionService.removeSession(refreshData.sessionId, session.login);
       return reply.code(401).send({ message: 'Sessão inválida para este IP.' });
+    }
+    const requestUa = req.headers['user-agent'] || '';
+    if (session.userAgent && session.userAgent !== requestUa) {
+      req.log.warn({
+        sessionId: refreshData.sessionId,
+        sessionUa: session.userAgent,
+        requestUa
+      }, 'Refresh bloqueado por User-Agent divergente');
+      await sessionService.removeRefreshToken(refreshToken);
+      await sessionService.removeSession(refreshData.sessionId, session.login);
+      return reply.code(401).send({ message: 'Sessão inválida para este dispositivo.' });
     }
 
     // Invalida sessão anterior e cria nova
@@ -90,7 +106,7 @@ class SessionController {
 
     // Rotaciona refresh token
     const refreshTtl = config.session.refreshTtlSeconds;
-    const { refreshId } = await sessionService.createRefreshToken(sessionId, refreshTtl, { ip: session.ip });
+    const { refreshId } = await sessionService.createRefreshToken(sessionId, refreshTtl, { ip: session.ip, userAgent: requestUa });
     await sessionService.removeRefreshToken(refreshToken);
     reply.setCookie(config.session.refreshCookieName, refreshId, {
       httpOnly: true,

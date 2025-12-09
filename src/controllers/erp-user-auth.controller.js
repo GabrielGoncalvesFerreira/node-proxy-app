@@ -39,6 +39,7 @@ class ErpUserAuthController {
     const rawClientType = req.headers['x-client-type'] ?? req.headers['x-client-type'];
     const clientType = getClientTypeFromHeaders(req.headers);
     const clientIp = req.ip;
+    const userAgent = req.headers['user-agent'] || '';
 
     if (!rawLogin || !rawPassword) {
       return reply.code(400).send({
@@ -71,6 +72,7 @@ class ErpUserAuthController {
         scope: result.scope,
         clientType,
         ip: clientIp,
+        userAgent,
         login: normalizedLogin || rawLogin,
       };
 
@@ -90,7 +92,7 @@ class ErpUserAuthController {
       }
 
       const refreshTtl = config.session.refreshTtlSeconds;
-      const { refreshId } = await sessionService.createRefreshToken(sessionId, refreshTtl, { ip: clientIp });
+      const { refreshId } = await sessionService.createRefreshToken(sessionId, refreshTtl, { ip: clientIp, userAgent });
 
       reply.setCookie(config.session.refreshCookieName, refreshId, {
         httpOnly: true,

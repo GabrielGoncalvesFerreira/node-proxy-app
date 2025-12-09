@@ -87,7 +87,23 @@ export async function proxyPreHandler(req, reply) {
       return reply.code(401).send({ message: 'Sessão inválida ou expirada.' });
     }
     if (session.ip && session.ip !== req.ip) {
+      req.log.warn({
+        sessionId: bearerSessionId,
+        sessionIp: session.ip,
+        requestIp: req.ip,
+        path: currentPath
+      }, 'Sessão bloqueada por IP divergente no proxy');
       return reply.code(401).send({ message: 'Sessão inválida para este IP.' });
+    }
+    const requestUa = getHeaderValue(req.headers, 'user-agent') || '';
+    if (session.userAgent && session.userAgent !== requestUa) {
+      req.log.warn({
+        sessionId: bearerSessionId,
+        sessionUa: session.userAgent,
+        requestUa,
+        path: currentPath
+      }, 'Sessão bloqueada por User-Agent divergente no proxy');
+      return reply.code(401).send({ message: 'Sessão inválida para este dispositivo.' });
     }
 
     req.headers.authorization = `Bearer ${session.token}`;

@@ -12,6 +12,7 @@ class AuthController {
     }
 
     const userIp = req.ip;
+    const userAgent = req.headers['user-agent'] || '';
     const forwardedHeaders = {};
     ['x-forwarded-for', 'x-real-ip', 'x-client-ip', 'x-bff-ip', 'x-request-id', 'user-agent', 'x-client-version'].forEach((header) => {
       const value = req.headers[header];
@@ -26,7 +27,7 @@ class AuthController {
 
       // Cria refresh token e seta em cookie httpOnly
       const refreshTtl = config.session.refreshTtlSeconds;
-      const { refreshId } = await sessionService.createRefreshToken(result.sessionId, refreshTtl, { ip: userIp });
+      const { refreshId } = await sessionService.createRefreshToken(result.sessionId, refreshTtl, { ip: userIp, userAgent });
       reply.setCookie(config.session.refreshCookieName, refreshId, {
         httpOnly: true,
         secure: config.session.secure,

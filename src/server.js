@@ -21,7 +21,7 @@ setGlobalDispatcher(new Agent({
 
 const app = Fastify({
   logger: true,
-  trustProxy: ['127.0.0.1', '::1', '172.40.0.0/24'],
+  trustProxy: ['127.0.0.1', '::1', '172.27.0.1/24'],
 });
 
 // CORS configurável por env (registra uma vez para todas as rotas/proxy)

@@ -55,6 +55,7 @@ class AuthService {
         if (value) ipHeaders[header] = value;
       });
 
+      const userAgent = forwardedHeaders['user-agent'];
 
       const { data: localData } = await httpClient.post(config.api.endpoints.erpToken, params, {
         headers: {
@@ -78,6 +79,7 @@ class AuthService {
         scope: localData.scope,
         isPendingMfa: false, 
         ip: userIp,
+        userAgent,
         login: normalizedEmail || emailToUse,
       };
 
