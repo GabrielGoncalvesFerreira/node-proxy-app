@@ -9,10 +9,19 @@ import { config } from './config/env.js';
 import { registerRoutes } from './routes.js';
 import { proxyPreHandler } from './proxy/middleware.js';
 
-const CORS_ORIGINS = (process.env.CORS_ORIGINS || '')
-  .split(',')
-  .map(o => o.trim())
-  .filter(Boolean);
+const parseRequiredList = (value, envName) => {
+  if (!value) {
+    throw new Error(`Env obrigatória: ${envName}`);
+  }
+  return value
+    .split(',')
+    .map(o => o.trim())
+    .filter(Boolean);
+};
+
+const CORS_ORIGINS = parseRequiredList(process.env.CORS_ORIGINS, 'CORS_ORIGINS');
+const TRUST_PROXY = parseRequiredList(process.env.TRUST_PROXY, 'TRUST_PROXY');
+
 
 setGlobalDispatcher(new Agent({
   keepAliveTimeout: 10_000,
@@ -21,7 +30,7 @@ setGlobalDispatcher(new Agent({
 
 const app = Fastify({
   logger: true,
-  trustProxy: ['127.0.0.1', '::1', '172.27.0.1/24'],
+  trustProxy: TRUST_PROXY,
 });
 
 // CORS configurável por env (registra uma vez para todas as rotas/proxy)
